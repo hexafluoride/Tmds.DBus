@@ -586,7 +586,7 @@ namespace Tmds.DBus
                                 }
                             }
                             watchers?.Invoke(new ServiceOwnerChangedEventArgs(serviceName, oldOwner, newOwner), null);
-                            return;
+                            break;
                         }
                         default:
                             break;
