@@ -57,7 +57,7 @@ namespace Tmds.DBus.Transports
             public fixed int fds[64];
         }
 
-        private class ReadContext
+        public class ReadContext
         {
             public TaskCompletionSource<int> Tcs;
             public byte[] Buffer;

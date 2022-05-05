@@ -34,6 +34,7 @@ namespace Tmds.DBus.CodeGen
         public IList<ArgumentDescription> InArguments { get { return _inArguments ?? Array.Empty<ArgumentDescription>(); } }
         public Signature? InSignature { get; }
         public bool IsGenericOut { get; }
+        public bool HasMessageParameter { get; set; }
 
     }
 }

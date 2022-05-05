@@ -6,7 +6,7 @@
 
 namespace Tmds.DBus.Protocol
 {
-    internal enum FieldCode : byte
+    public enum FieldCode : byte
     {
         Invalid     = 0,
         Path        = 1,

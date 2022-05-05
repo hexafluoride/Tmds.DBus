@@ -265,12 +265,22 @@ namespace Tmds.DBus.CodeGen
                     IList<ArgumentDescription> inArguments = null;
                     Signature? inSignature = null;
                     var parameters = member.GetParameters();
+                    
+                    // TODO: This is where i should implement credential passing
+
+                    var ignoreParameters = 0;
+
+                    if (parameters.Length > 0 && parameters[parameters.Length - 1].ParameterType == typeof(Message))
+                    {
+                        ignoreParameters++;
+                    }
+                    
                     if (parameters.Length > 0 && parameters[parameters.Length - 1].ParameterType == s_cancellationTokenType)
                     {
                         throw new NotSupportedException($"DBus Method {memberName} does not support cancellation. See https://github.com/tmds/Tmds.DBus/issues/15.");
                     }
 
-                    for (int i = 0; i < parameters.Length; i++)
+                    for (int i = 0; i < parameters.Length - ignoreParameters; i++)
                     {
                         var param = parameters[i];
                         var parameterType = param.ParameterType;
@@ -290,6 +300,11 @@ namespace Tmds.DBus.CodeGen
                     }
 
                     var methodDescription = new MethodDescription(member, name, inArguments, inSignature, outType, isGenericOut, outSignature, outArguments);
+
+                    if (ignoreParameters == 1)
+                    {
+                        methodDescription.HasMessageParameter = true;
+                    }
                     if (member.Name == interfaceAttribute.GetPropertyMethod)
                     {
                         if (propertyGetMethod != null)

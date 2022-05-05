@@ -9,7 +9,7 @@ using System.Collections.Generic;
 
 namespace Tmds.DBus.Protocol
 {
-    internal class Header
+    public class Header
     {
         public Header(MessageType type, EndianFlag endianness)
         {

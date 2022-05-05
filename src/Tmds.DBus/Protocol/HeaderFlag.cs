@@ -8,7 +8,7 @@ using System;
 namespace Tmds.DBus.Protocol
 {
     [Flags]
-    internal enum HeaderFlag : byte
+    public enum HeaderFlag : byte
     {
         None = 0,
         NoReplyExpected = 0x1,

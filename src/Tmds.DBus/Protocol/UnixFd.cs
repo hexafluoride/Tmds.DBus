@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 
 namespace Tmds.DBus.Protocol
 {
-    internal struct UnixFd
+    public struct UnixFd
     {
         public SafeHandle SafeHandle { get; private set; }
         public int Handle { get; private set; }

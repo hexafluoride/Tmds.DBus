@@ -7,7 +7,7 @@ using System;
 
 namespace Tmds.DBus.Protocol
 {
-    internal enum MessageType : byte
+    public enum MessageType : byte
     {
         //This is an invalid type.
         Invalid,

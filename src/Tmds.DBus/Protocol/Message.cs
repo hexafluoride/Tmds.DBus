@@ -5,7 +5,7 @@
 
 namespace Tmds.DBus.Protocol
 {
-    internal class Message
+    public class Message
     {
         public Message(Header header, byte[] body, UnixFd[] unixFds)
         {

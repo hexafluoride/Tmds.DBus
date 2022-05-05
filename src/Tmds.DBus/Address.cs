@@ -6,6 +6,7 @@
 using System;
 using System.IO.MemoryMappedFiles;
 using System.Runtime.InteropServices;
+using Mono.Unix.Native;
 
 namespace Tmds.DBus
 {
@@ -61,7 +62,8 @@ namespace Tmds.DBus
                     }
                     else
                     {
-                        _sessionAddress = GetSessionBusAddressFromX11();
+                        _sessionAddress = $"unix:path=/run/user/{Syscall.getuid()}/bus";
+                        //_sessionAddress = GetSessionBusAddressFromX11();
                     }
                 }
                 _sessionAddressResolved = true;

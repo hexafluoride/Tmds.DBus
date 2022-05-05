@@ -322,6 +322,11 @@ namespace Tmds.DBus.CodeGen
                         ilg.Emit(OpCodes.Ldloc, reader);
                         ilg.Emit(OpCodes.Call, ReadMethodFactory.CreateReadMethodForType(parameterType));
                     }
+
+                    if (dbusMethod.HasMessageParameter)
+                    {
+                        ilg.Emit(OpCodes.Ldarg_2);
+                    }
                 }
 
                 // Call method
