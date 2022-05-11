@@ -4,7 +4,7 @@
 
 namespace Tmds.DBus
 {
-    internal enum ReleaseNameReply : uint
+    public enum ReleaseNameReply : uint
     {
         ReplyReleased = 1,
         NonExistent,

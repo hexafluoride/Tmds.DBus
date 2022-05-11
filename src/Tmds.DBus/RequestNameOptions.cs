@@ -7,7 +7,7 @@ using System;
 namespace Tmds.DBus
 {
     [Flags]
-    internal enum RequestNameOptions : uint
+    public enum RequestNameOptions : uint
     {
         None = 0,
         AllowReplacement = 0x1,

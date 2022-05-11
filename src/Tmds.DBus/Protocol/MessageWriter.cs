@@ -16,7 +16,7 @@ using Tmds.DBus.CodeGen;
 
 namespace Tmds.DBus.Protocol
 {
-    internal sealed class MessageWriter
+    public sealed class MessageWriter
     {
         EndianFlag endianness;
         MemoryStream stream;

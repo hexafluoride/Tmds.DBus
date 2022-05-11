@@ -4,7 +4,7 @@
 
 namespace Tmds.DBus.Protocol
 {
-    interface IProxyFactory
+    public interface IProxyFactory
     {
         T CreateProxy<T>(string serviceName, ObjectPath path);
     }

@@ -452,6 +452,40 @@ namespace Tmds.DBus
             return RegisterObjectsAsync(new[] { o });
         }
 
+        public async Task RegisterProxiedObjectAsync(ObjectPath path, Type objectType, object defaultObject, Func<Message, object> resolver)
+        {
+            CheckNotConnectionType(ConnectionType.ClientAutoConnect);
+            var connection = GetConnectedConnection();
+            var assembly = DynamicAssembly.Instance;
+            
+            var implementationType = assembly.GetExportTypeInfo(objectType, true);
+            var registration = (DBusAdapter)Activator.CreateInstance(implementationType.AsType(), _dbusConnection, path, resolver, _factory, CaptureSynchronizationContext(), defaultObject);
+
+            lock (_gate)
+            {
+                connection.AddMethodHandlers(new [] { new KeyValuePair<ObjectPath, MethodHandler>(path, registration.HandleMethodCall) });
+                _registeredObjects.Add(registration.Path, registration);
+            }
+            try
+            {
+                    await registration.WatchSignalsAsync().ConfigureAwait(false);
+                lock (_gate)
+                {
+                        registration.CompleteRegistration();
+                }
+            }
+            catch
+            {
+                lock (_gate)
+                {
+                    registration.Unregister();
+                    _registeredObjects.Remove(registration.Path);
+                    connection.RemoveMethodHandlers(new [] { registration.Path });
+                }
+                throw;
+            }
+        }
+
         /// <summary>
         /// Publishes objects.
         /// </summary>
@@ -470,7 +504,7 @@ namespace Tmds.DBus
             var registrations = new List<DBusAdapter>();
             foreach (var o in objects)
             {
-                var implementationType = assembly.GetExportTypeInfo(o.GetType());
+                var implementationType = assembly.GetExportTypeInfo(o.GetType(), false);
                 var objectPath = o.ObjectPath;
                 var registration = (DBusAdapter)Activator.CreateInstance(implementationType.AsType(), _dbusConnection, objectPath, o, _factory, CaptureSynchronizationContext());
                 registrations.Add(registration);

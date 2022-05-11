@@ -11,9 +11,9 @@ using Tmds.DBus.Protocol;
 
 namespace Tmds.DBus.CodeGen
 {
-    internal class DBusAdapter
+    public class DBusAdapter
     {
-        internal delegate Task<Message> MethodCallHandler(object o, Message methodCall, IProxyFactory factory);
+        public delegate Task<Message> MethodCallHandler(object o, Message methodCall, IProxyFactory factory);
 
         private enum State
         {
@@ -31,10 +31,27 @@ namespace Tmds.DBus.CodeGen
         protected internal readonly Dictionary<string, MethodCallHandler> _methodHandlers;
         protected internal readonly object _object;
 
+        protected bool isProxied = false;
+        protected Func<Message, object> proxyDelegate = null;
+
         private State _state;
         private List<IDisposable> _signalWatchers;
 
-        protected DBusAdapter(DBusConnection connection, ObjectPath objectPath, object o, IProxyFactory factory, SynchronizationContext synchronizationContext)
+        public DBusAdapter(DBusConnection connection, ObjectPath objectPath, Func<Message,object> o, IProxyFactory factory, SynchronizationContext synchronizationContext, object defaultObject)
+        {
+            _connection = connection;
+            _objectPath = objectPath;
+            isProxied = true;
+            proxyDelegate = o;
+            _object = defaultObject;
+            _state = State.Registering;
+            _factory = factory;
+            _synchronizationContext = synchronizationContext;
+            _methodHandlers = new Dictionary<string, MethodCallHandler>();
+            _methodHandlers.Add(GetMethodLookupKey("org.freedesktop.DBus.Introspectable", "Introspect", null), HandleIntrospect);
+        }
+        
+        public DBusAdapter(DBusConnection connection, ObjectPath objectPath, object o, IProxyFactory factory, SynchronizationContext synchronizationContext)
         {
             _connection = connection;
             _objectPath = objectPath;
@@ -151,6 +168,8 @@ namespace Tmds.DBus.CodeGen
 
         public async Task<Message> HandleMethodCall(Message methodCall)
         {
+            var targetObject = isProxied ? proxyDelegate(methodCall) : _object;
+            
             var key = GetMethodLookupKey(methodCall.Header.Interface, methodCall.Header.Member, methodCall.Header.Signature);
             MethodCallHandler handler = null;
             if (!_methodHandlers.TryGetValue(key, out handler))
@@ -169,7 +188,7 @@ namespace Tmds.DBus.CodeGen
                 {
                     try
                     {
-                        return await handler(_object, methodCall, _factory).ConfigureAwait(false);
+                        return await handler(targetObject, methodCall, _factory).ConfigureAwait(false);
                     }
                     catch (DBusException be)
                     {
@@ -187,7 +206,7 @@ namespace Tmds.DBus.CodeGen
                         Message reply;
                         try
                         {
-                            reply = await handler(_object, methodCall, _factory).ConfigureAwait(false);
+                            reply = await handler(targetObject, methodCall, _factory).ConfigureAwait(false);
                         }
                         catch (DBusException be)
                         {

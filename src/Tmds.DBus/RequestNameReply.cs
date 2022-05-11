@@ -4,7 +4,7 @@
 
 namespace Tmds.DBus
 {
-    internal enum RequestNameReply : uint
+    public enum RequestNameReply : uint
     {
         PrimaryOwner = 1,
         InQueue,

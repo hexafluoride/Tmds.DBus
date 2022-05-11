@@ -16,7 +16,7 @@ using Tmds.DBus.Transports;
 
 namespace Tmds.DBus
 {
-    class DBusConnection
+    public class DBusConnection
     {
         private class SignalHandlerRegistration : IDisposable
         {

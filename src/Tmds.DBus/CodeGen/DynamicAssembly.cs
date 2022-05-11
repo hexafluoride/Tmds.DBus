@@ -79,7 +79,7 @@ namespace Tmds.DBus.CodeGen
             }
         }
 
-        public TypeInfo GetExportTypeInfo(Type objectType)
+        public TypeInfo GetExportTypeInfo(Type objectType, bool alternate)
         {
             TypeInfo typeInfo;
 
@@ -101,7 +101,7 @@ namespace Tmds.DBus.CodeGen
                     }
                 }
 
-                typeInfo = new DBusAdapterTypeBuilder(_moduleBuilder).Build(objectType);
+                typeInfo = new DBusAdapterTypeBuilder(_moduleBuilder).Build(objectType, alternate);
 
                 lock (_adapterTypeMap)
                 {

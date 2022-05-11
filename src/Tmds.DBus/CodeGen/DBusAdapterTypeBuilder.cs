@@ -17,7 +17,7 @@ namespace Tmds.DBus.CodeGen
     {
         private static readonly ConstructorInfo s_messageWriterConstructor = typeof(MessageWriter).GetConstructor(Type.EmptyTypes);
         private static readonly Type[] s_dbusAdaptorConstructorParameterTypes = new Type[] { typeof(DBusConnection), typeof(ObjectPath), typeof(object), typeof(IProxyFactory), typeof(SynchronizationContext) };
-        private static readonly ConstructorInfo s_baseConstructor = typeof(DBusAdapter).GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic, s_dbusAdaptorConstructorParameterTypes);
+        private static readonly ConstructorInfo s_baseConstructor = typeof(DBusAdapter).GetConstructor(BindingFlags.Instance | BindingFlags.Public, s_dbusAdaptorConstructorParameterTypes);
         private static readonly ConstructorInfo s_methodHandlerConstructor = typeof(DBusAdapter.MethodCallHandler).GetConstructors()[0];
         private static readonly ConstructorInfo s_signatureConstructor = typeof(Signature).GetConstructor(new Type[] { typeof(string) });
         private static readonly ConstructorInfo s_nullableSignatureConstructor = typeof(Signature?).GetConstructor(new Type[] { typeof(Signature) });
@@ -50,7 +50,7 @@ namespace Tmds.DBus.CodeGen
             _moduleBuilder = moduleBuilder;
         }
 
-        public TypeInfo Build(Type objectType)
+        public TypeInfo Build(Type objectType, bool alternate)
         {
             if (_typeBuilder != null)
             {
@@ -63,7 +63,7 @@ namespace Tmds.DBus.CodeGen
 
             var description = TypeDescription.DescribeObject(objectType);
 
-            ImplementConstructor(description);
+            ImplementConstructor(description, alternate);
             ImplementStartWatchingSignals(description.Interfaces);
 
             return _typeBuilder.CreateTypeInfo();
@@ -136,36 +136,24 @@ namespace Tmds.DBus.CodeGen
             ilg.Emit(OpCodes.Ret);
         }
 
-        private void ImplementConstructor(TypeDescription typeDescription)
+        private void ImplementConstructor(TypeDescription typeDescription, bool alternate)
         {
             var dbusInterfaces = typeDescription.Interfaces;
             // DBusConnection connection, ObjectPath objectPath, object o, IProxyFactory factory
-            var constructor = _typeBuilder.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, s_dbusAdaptorConstructorParameterTypes);
-            var ilg = constructor.GetILGenerator();
 
-            {
-                // base constructor
-                ilg.Emit(OpCodes.Ldarg_0); // this
-                ilg.Emit(OpCodes.Ldarg_1); // DBusConnection
-                ilg.Emit(OpCodes.Ldarg_2); // ObjectPath
-                ilg.Emit(OpCodes.Ldarg_3); // object
-                ilg.Emit(OpCodes.Ldarg, 4); // IProxyFactory
-                ilg.Emit(OpCodes.Ldarg, 5); // SynchronizationContext
-                ilg.Emit(OpCodes.Call, s_baseConstructor);
-            }
-            
-            var introspectionXml = GenerateIntrospectionXml(typeDescription);
-            ilg.Emit(OpCodes.Ldarg_0);
-            ilg.Emit(OpCodes.Ldstr, introspectionXml);
-            ilg.Emit(OpCodes.Stfld, s_setTypeIntrospectionField);
+            var methodHandlers = new List<MethodInfo>();
+
 
             foreach (var dbusInterface in dbusInterfaces)
             {
                 IEnumerable<MethodDescription> methods = dbusInterface.Methods ?? Array.Empty<MethodDescription>();
 
-                var propertyMethods = new[] { dbusInterface.GetPropertyMethod,
-                                               dbusInterface.GetAllPropertiesMethod,
-                                               dbusInterface.SetPropertyMethod };
+                var propertyMethods = new[]
+                {
+                    dbusInterface.GetPropertyMethod,
+                    dbusInterface.GetAllPropertiesMethod,
+                    dbusInterface.SetPropertyMethod
+                };
 
                 methods = methods.Concat(propertyMethods);
 
@@ -178,35 +166,135 @@ namespace Tmds.DBus.CodeGen
 
                     if (method.IsGenericOut)
                     {
-                        throw new NotImplementedException($"Cannot adaptor class for generic method {method.MethodInfo.ToString()}. Refactor the method to return Task<object>.");
+                        throw new NotImplementedException(
+                            $"Cannot adaptor class for generic method {method.MethodInfo.ToString()}. Refactor the method to return Task<object>.");
                     }
+                    
 
                     var signature = method.InSignature;
                     var memberName = method.Name;
                     bool isPropertyMethod = propertyMethods.Contains(method);
-                    string key = isPropertyMethod ? DBusAdapter.GetPropertyAddKey(dbusInterface.Name, memberName, signature) :
-                                                    DBusAdapter.GetMethodLookupKey(dbusInterface.Name, memberName, signature);
-                    // _methodHandlers.Add(key, GenMethodHandler)
-                    {
-                        // _methodHandlers
-                        ilg.Emit(OpCodes.Ldarg_0);
-                        ilg.Emit(OpCodes.Ldfld, s_methodDictionaryField);
-
-                        // key
-                        ilg.Emit(OpCodes.Ldstr, key);
-
-                        // value
-                        ilg.Emit(OpCodes.Ldarg_0);
-                        ilg.Emit(OpCodes.Ldftn, GenMethodHandler(key, method, isPropertyMethod));
-                        ilg.Emit(OpCodes.Newobj, s_methodHandlerConstructor);
-
-                        // Add
-                        ilg.Emit(OpCodes.Call, s_methodDictionaryAdd);
-                    }
+                    string key = isPropertyMethod
+                        ? DBusAdapter.GetPropertyAddKey(dbusInterface.Name, memberName, signature)
+                        : DBusAdapter.GetMethodLookupKey(dbusInterface.Name, memberName, signature);
+                    methodHandlers.Add(GenMethodHandler(key, method, isPropertyMethod));
                 }
             }
 
-            ilg.Emit(OpCodes.Ret);
+
+            for (int i = 0; i < 2; i++)
+            {
+                alternate = i == 0;
+
+                ILGenerator ilg = null;
+                if (alternate)
+                {
+                    var alternateConstructorTypes = new Type[]
+                    {
+                        typeof(DBusConnection), typeof(ObjectPath), typeof(Func<Message, object>),
+                        typeof(IProxyFactory),
+                        typeof(SynchronizationContext), typeof(object)
+                    };
+                    var constructor = _typeBuilder.DefineConstructor(MethodAttributes.Public,
+                        CallingConventions.Standard, alternateConstructorTypes);
+                    ilg = constructor.GetILGenerator();
+
+
+                    {
+                        // base constructor
+                        ilg.Emit(OpCodes.Ldarg_0); // this
+                        ilg.Emit(OpCodes.Ldarg_1); // DBusConnection
+                        ilg.Emit(OpCodes.Ldarg_2); // ObjectPath
+                        ilg.Emit(OpCodes.Ldarg_3); // object
+                        ilg.Emit(OpCodes.Ldarg, 4); // IProxyFactory
+                        ilg.Emit(OpCodes.Ldarg, 5); // SynchronizationContext
+                        ilg.Emit(OpCodes.Ldarg, 6); // SynchronizationContext
+                        ilg.Emit(OpCodes.Call,
+                            typeof(DBusAdapter).GetConstructor(BindingFlags.Instance | BindingFlags.Public,
+                                alternateConstructorTypes));
+                    }
+                }
+                else
+                {
+                    var constructor = _typeBuilder.DefineConstructor(MethodAttributes.Public,
+                        CallingConventions.Standard,
+                        s_dbusAdaptorConstructorParameterTypes);
+                    ilg = constructor.GetILGenerator();
+
+                    {
+                        // base constructor
+                        ilg.Emit(OpCodes.Ldarg_0); // this
+                        ilg.Emit(OpCodes.Ldarg_1); // DBusConnection
+                        ilg.Emit(OpCodes.Ldarg_2); // ObjectPath
+                        ilg.Emit(OpCodes.Ldarg_3); // object
+                        ilg.Emit(OpCodes.Ldarg, 4); // IProxyFactory
+                        ilg.Emit(OpCodes.Ldarg, 5); // SynchronizationContext
+                        ilg.Emit(OpCodes.Call, s_baseConstructor);
+                    }
+                }
+
+                var introspectionXml = GenerateIntrospectionXml(typeDescription);
+                ilg.Emit(OpCodes.Ldarg_0);
+                ilg.Emit(OpCodes.Ldstr, introspectionXml);
+                ilg.Emit(OpCodes.Stfld, s_setTypeIntrospectionField);
+
+                int j = 0;
+
+                foreach (var dbusInterface in dbusInterfaces)
+                {
+                    IEnumerable<MethodDescription> methods = dbusInterface.Methods ?? Array.Empty<MethodDescription>();
+
+                    var propertyMethods = new[]
+                    {
+                        dbusInterface.GetPropertyMethod,
+                        dbusInterface.GetAllPropertiesMethod,
+                        dbusInterface.SetPropertyMethod
+                    };
+
+                    methods = methods.Concat(propertyMethods);
+
+                    foreach (var method in methods)
+                    {
+                        if (method == null)
+                        {
+                            continue;
+                        }
+
+                        if (method.IsGenericOut)
+                        {
+                            throw new NotImplementedException(
+                                $"Cannot adaptor class for generic method {method.MethodInfo.ToString()}. Refactor the method to return Task<object>.");
+                        }
+
+                        var signature = method.InSignature;
+                        var memberName = method.Name;
+                        bool isPropertyMethod = propertyMethods.Contains(method);
+                        string key = isPropertyMethod
+                            ? DBusAdapter.GetPropertyAddKey(dbusInterface.Name, memberName, signature)
+                            : DBusAdapter.GetMethodLookupKey(dbusInterface.Name, memberName, signature);
+                        // _methodHandlers.Add(key, GenMethodHandler)
+                        {
+                            // _methodHandlers
+                            ilg.Emit(OpCodes.Ldarg_0);
+                            ilg.Emit(OpCodes.Ldfld, s_methodDictionaryField);
+
+                            // key
+                            ilg.Emit(OpCodes.Ldstr, key);
+
+                            // value
+                            ilg.Emit(OpCodes.Ldarg_0);
+                            ilg.Emit(OpCodes.Ldftn, methodHandlers[j++]);
+                            ilg.Emit(OpCodes.Newobj, s_methodHandlerConstructor);
+
+                            // Add
+                            ilg.Emit(OpCodes.Call, s_methodDictionaryAdd);
+                        }
+                    }
+                }
+
+                ilg.Emit(OpCodes.Ret);
+
+            }
         }
 
         private MethodInfo GenSendSignal(SignalDescription signalDescription, bool isPropertiesChangedSignal)
